@@ -31,9 +31,30 @@ char* addChar(char val, char* buf){
 	memcpy(buf, &val, sizeof(val));
 	return buf+sizeof(val);
 }
+char* addShort(short val, char* buf){
+	memcpy(buf, &val, sizeof(val));
+	return buf + sizeof(val);
+}
 char* addString(char* str, char* buf){
 	memcpy(buf, str, 9);
 	return buf+9;
+}
+
+char* readInt(int* val, char* buf){
+	*val = *(int *) buf;
+	return buf + sizeof(int);
+}
+char* readChar(char* c, char* buf){
+	*c = *buf;
+	return buf + sizeof(char);
+}
+char* readShort(short* val, char* buf){
+	*val = *(short *)buf;
+	return buf + sizeof(short);
+}
+char* readString(char str[9], char* buf){
+	strcpy(str, buf);
+	return buf + 9;
 }
 
 // return the offset
@@ -67,16 +88,27 @@ char* addNodeIds(char* start, int myId){
 	return ptr;
 }
 
-char* addHeader(char* start, char type, int senderId, int seqNum, int numLinks, int numFiles){
+char* addHeader(char* start, short type, int senderId, int seqNum, int numLinks, int numFiles){
 	char* ptr = start;
 	ptr = addChar('1', ptr);
 	// there is only one byte for this filed, really?
 	ptr = addChar('9',ptr);
-	ptr = addChar(type, ptr);
+	ptr = addShort(type, ptr);
 	ptr = addInt(senderId, ptr);
 	ptr = addInt(seqNum, ptr);
 	ptr = addInt(numLinks, ptr);
 	ptr = addInt(numFiles, ptr);
+	return ptr;
+}
+
+char* readHeader(char* start, char* ttl, short* type, int* senderId, int* seqNum, int* numLinks, int* numFiles){
+	char* ptr = start;
+	ptr = readChar(ttl, ptr);
+	ptr = readShort(type, ptr);
+	ptr = readInt(senderId, ptr);
+	ptr = readInt(seqNum, ptr);
+	ptr = readInt(numLinks, ptr);
+	ptr = readInt(numFiles, ptr);
 	return ptr;
 }
 
@@ -112,7 +144,7 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 			cli_addr.sin_port = htons(re->routingPort);
 			
 			char* sendBuf = createPacket(numLinks, numFiles);
-			ptr = addHeader(sendBuf, '1', senderId, re->seqNumSend, numLinks, numFiles);
+			ptr = addHeader(sendBuf, 1, senderId, re->seqNumSend, numLinks, numFiles);
 			printBuf(sendBuf, ptr-sendBuf+1);
 			//printf("Header length is %ld\n", ptr-sendBuf+1);
 			ptr = addNodeIds(ptr, senderId);
@@ -135,7 +167,34 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 		}
 		curr = curr->next;
 	}
+	
+
 }
+
+void printLinkEnt(char* buf, int numLinks){
+	int i;
+	int* intArr = (int *)buf;
+	
+	for(i = 0; i < numLinks; i++){
+		printf("link entry %d is %d",i,intArr[i]);
+	}
+}
+
+void printFileEnt(char* buf, int numFiles){
+	int i;
+	
+	for(i = 0; i < numFiles; i++){
+		printf("file entry %d is %s",i,buf + 9*i);
+	}
+}
+
+
+
+
+
+
+
+
 
 
 

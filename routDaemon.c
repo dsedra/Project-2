@@ -83,10 +83,19 @@ int main(int argc, char** argv){
 	int p;
 	
 	
+	
 	// these are for UDP listening
     int remoteSocket;
     struct sockaddr_in udpAddr, outAddr;
     unsigned int udpAddrLength;
+	char* udpArr = malloc(20);
+	ssize_t readUDP = 0;
+	char ttlUDP;
+	short typeUDP;
+	int senderIdUDP;
+	int seqNumberUDP;
+	int numLinksUDP;
+	int numFilesUDP;
 
 	
 	for(p = 0; p < 1024; p++){
@@ -221,13 +230,29 @@ int main(int argc, char** argv){
 				}
 				// advertisement or ack comes into this routing table
 				else if (i == remoteSocket){
-					
-					//here is temporary test
-					int clilen;
+					unsigned int clilen;
 					clilen = sizeof(outAddr);
-					recvfrom(remoteSocket, buf, 256, 0, (struct sockaddr *)&outAddr, &clilen);
-					printf("From udp %s\n", buf);
-					memset(buf, '\0',256);
+					
+					if((re = recvfrom(remoteSocket, buf, 10, 0, (struct sockaddr *)&outAddr, &clilen)) < 0){
+						//error stuff
+					}
+					else{
+						readUDP += re;
+						memcpy((udpArr+readUDP),buf,re);
+						/* parse header */
+						if(readUDP == 20){
+							readHeader(udpArr, &ttlUDP, &typeUDP, &senderIdUDP, &seqNumberUDP, &numLinksUDP, &numFilesUDP);
+							udpArr = realloc(udpArr, numLinksUDP*sizeof(int) + numFilesUDP * 9); 
+							
+						}
+						/* check for end of packet header + variable lengths*/
+						else if(readUDP == 20 + numLinksUDP*sizeof(int) + numFilesUDP * 9){
+							/* for testing */
+							printLinkEnt(udpArr, numLinksUDP);
+							printFileEnt(udpArr + numLinksUDP*sizeof(int), numFilesUDP);
+							
+						}
+					}
 					
 				}
 				// It is time to send advertisement
