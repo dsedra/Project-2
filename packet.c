@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "linkedList.h"
+#include "packet.h"
 
 /*	
 	Version (1), TTL (1), Type (2)
@@ -91,8 +92,8 @@ char* addNodeIds(char* start, int myId){
 char* addHeader(char* start, short type, int senderId, int seqNum, int numLinks, int numFiles){
 	char* ptr = start;
 	ptr = addChar('1', ptr);
-	// there is only one byte for this filed, really?
-	ptr = addChar('9',ptr);
+	int ttl = 32;
+	ptr = addChar((char)ttl,ptr);
 	ptr = addShort(type, ptr);
 	ptr = addInt(senderId, ptr);
 	ptr = addInt(seqNum, ptr);
@@ -103,6 +104,8 @@ char* addHeader(char* start, short type, int senderId, int seqNum, int numLinks,
 
 char* readHeader(char* start, char* ttl, short* type, int* senderId, int* seqNum, int* numLinks, int* numFiles){
 	char* ptr = start;
+	char version;
+	ptr = readChar(&version, ptr);
 	ptr = readChar(ttl, ptr);
 	ptr = readShort(type, ptr);
 	ptr = readInt(senderId, ptr);
@@ -121,6 +124,118 @@ void printBuf(char* buf, int len){
 	printf("\nend\n");
 }
 
+void freeBuffer(char* buf){
+	if(buf != NULL){
+		free(buf);
+	}
+}
+
+void decreaseCountDown(int udp){
+	
+	node* curr = reSendList.head;
+	
+	while( curr != NULL ){
+		deferredMessage* df =(deferredMessage* ) curr->data;
+		df->reTranCountDown -= advCycle;
+		
+		if( df->reTranCountDown == 0){
+			// here resend
+		} 
+		
+		curr = curr->next;
+	}
+}
+
+void reTransmit(int udp, int receiverId, int senderId ){
+	routingEntry* re = getRoutingEntry( &routing , senderId );
+	char* ptr;
+	if( re != NULL ){
+		char* sendBuf = createPacket(re->numLinks , re->numFiles);
+		ptr = addHeader(sendBuf, 1, senderId, re->seqNumReceive, re->numLinks, re->numFiles);
+		
+		node* curr = re->neighbors->head;
+		while( curr != NULL ){
+			int* id = (int* )curr->data;
+		 	addInt(*id, ptr);
+			ptr += sizeof(int);
+			curr = curr->next;
+		}
+		curr = re->objects->head;
+		while( curr != NULL ){
+			char* objectName = (char* )curr->data;
+			addString(objectName, ptr);
+			ptr+=9;
+			curr = curr->next;
+		}
+		routingEntry* neighborToReceive = getRoutingEntry( &routing, receiverId );
+		if( neighborToReceive!= NULL ){
+			struct sockaddr_in cli_addr;
+			struct hostent *h;
+			if((h = gethostbyname(re->hostName))==NULL) {
+				printf("error resolving host\n");
+				return;
+			}
+			memset(&cli_addr, '\0', sizeof(cli_addr));
+			cli_addr.sin_family = AF_INET;
+			cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
+			cli_addr.sin_port = htons(neighborToReceive->routingPort);
+			ssize_t sen;
+			int packetSize = ptr - sendBuf + 1;
+			
+			sen = sendto(udp, sendBuf ,packetSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
+			if(sen <= 0 ){
+				printf("This is really bad\n");
+			}
+		}
+		freeBuffer(sendBuf);
+	}
+}
+
+
+
+
+void forward(int udp, char* packet, int packetSize, int excludeId){
+	
+	// here drease the TTL by one
+	char* ttl = packet+1;
+	*ttl = *(ttl)-1;
+	
+	node* curr = routing.head;
+	while( curr != NULL ){
+		routingEntry* re = (routingEntry*)curr->data;
+		if (re->isNeighbor && re->nodeId != excludeId){
+			struct sockaddr_in cli_addr;
+			struct hostent *h;
+			
+			if((h = gethostbyname(re->hostName))==NULL) {
+				printf("error resolving host\n");
+				return;
+			}
+			memset(&cli_addr, '\0', sizeof(cli_addr));
+			cli_addr.sin_family = AF_INET;
+			cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
+			cli_addr.sin_port = htons(re->routingPort);
+			
+			ssize_t sen;
+			printf("Start to forward to node %d\n", re->nodeId);
+			sen = sendto(udp, packet ,packetSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
+			if(sen <= 0 ){
+				printf("This is really bad\n");
+			}
+			
+			// add each advertisement into a buffer, assumed that they are not acked yet
+			// when receive ack, remove them from the buffer
+			deferredMessage* msg = malloc(sizeof(deferredMessage));
+			msg->receiverId = re->nodeId;
+			msg->senderId = excludeId;
+			msg->reTranCountDown = retranCycle;
+		
+			insert(&reSendList, msg, sizeof(deferredMessage));
+		}
+		curr = curr->next;
+	}
+}
+
 
 void advertise(int udp , int senderId, int numLinks, int numFiles){
 	node* curr = routing.head;
@@ -128,7 +243,7 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 	
 	while( curr != NULL ){
 		routingEntry* re = (routingEntry*)curr->data;
-		if (re->isNeighbor){
+		if (re->isNeighbor ){
 			
 			
 			struct sockaddr_in cli_addr;
@@ -144,7 +259,7 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 			cli_addr.sin_port = htons(re->routingPort);
 			
 			char* sendBuf = createPacket(numLinks, numFiles);
-			ptr = addHeader(sendBuf, 1, senderId, re->seqNumSend, numLinks, numFiles);
+			ptr = addHeader(sendBuf, 1, senderId, seqNumSend, numLinks, numFiles);
 			printBuf(sendBuf, ptr-sendBuf+1);
 			//printf("Header length is %ld\n", ptr-sendBuf+1);
 			ptr = addNodeIds(ptr, senderId);
@@ -162,8 +277,15 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 				printf("This is really bad\n");
 			}
 			
+			// add each advertisement into a buffer, assumed that they are not acked yet
+			// when receive ack, remove them from the buffer
+			deferredMessage* msg = malloc(sizeof(deferredMessage));
+			msg->receiverId = re->nodeId;
+			msg->senderId = senderId;
+			msg->reTranCountDown = retranCycle;
+			insert(&reSendList, msg, sizeof(deferredMessage));
 			
-			
+			freeBuffer(sendBuf);
 		}
 		curr = curr->next;
 	}

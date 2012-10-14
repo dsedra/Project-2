@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 typedef struct node_s{
 	void* data;
@@ -23,6 +26,9 @@ typedef struct re{
 	int nodeId;
 	int nextHop;
 	linkedList* neighbors;
+	linkedList* objects;
+	
+	
 	struct re* parent;
 	int visited;
 	// below are normal information
@@ -32,9 +38,11 @@ typedef struct re{
 	int localPort;
 	int serverPort;
 	int isNeighbor;
-	int seqNumSend;
 	int seqNumAck;
-	int seqNumRecieve;
+	int seqNumReceive;
+	int ttl;
+	int numFiles;
+	int numLinks;
 	
 }routingEntry;
 
@@ -45,6 +53,9 @@ typedef struct client{
 
 extern linkedList fileList;
 extern linkedList routing;
+extern linkedList reSendList;
+extern int seqNumSend;
+
 
 void insert( linkedList* list, void* data, int size);
 fileEntry* getFileEntry(linkedList* list, char* obj);
@@ -54,6 +65,11 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort,int l
 void printRouting(linkedList list);
 void printFile(linkedList list);
 fileEntry* initFL(char* objectName, char* path);
+void freeList(linkedList* list);
+node* freeNode(node* n);
+void printRoutingEntry(routingEntry* re);
+void decreaseTTL();
+int resolvNeighbor(struct sockaddr_in cli_addr);
 int close_socket(int sock);
 
 #endif

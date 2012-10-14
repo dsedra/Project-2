@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
 #include "linkedList.h"
 
 routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int localPort,int serverPort, int isNeighbor){
@@ -15,11 +19,14 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int 
     newp->localPort = localPort;
     newp->serverPort = serverPort;
 	newp->isNeighbor = isNeighbor;
-	newp->seqNumSend = 0;
+	//newp->seqNumSend = 0;
 	newp->seqNumAck = 0;
-	newp->seqNumRecieve = 1;
+	newp->seqNumReceive = 0;
 	
 	newp->neighbors = malloc(sizeof(linkedList));
+	newp->objects = malloc(sizeof(linkedList));
+	
+	
 	newp->neighbors->head = NULL;
 	newp->neighbors->tail = NULL;
 	
@@ -100,6 +107,32 @@ routingEntry* pop( linkedList* list ){
 	return re;
 }
 
+node* freeNode(node* n){
+	node* next;
+	next = NULL;
+	
+	if ( n != NULL ){
+		
+		next = n->next;
+		
+		if( n->data != NULL ){
+			free(n->data);
+		}
+		free(n);
+	}
+	return next;
+}
+
+void freeList(linkedList* list){
+	node* curr = list->head;
+	while( curr != NULL ){
+		
+		curr = freeNode( curr );
+	}
+	list->head = NULL;
+	list->tail = NULL;
+}
+
 void printFile(linkedList list){
 	node* currentp = list.head;
 
@@ -122,14 +155,53 @@ void printRouting(linkedList list){
 		node* curr;
 		curr = entryp->neighbors->head;
 		while( curr != NULL){
-			routingEntry* nb = (routingEntry*) curr->data;
-			printf("---Neighbor %d\n", nb->nodeId);
+			int* nb = (int*) curr->data;
+			printf("---Neighbor %d\n", *nb);
 			curr = curr->next;
 		}
         currentp = currentp->next;
     }
     
 }
+
+void printRoutingEntry(routingEntry* re){
+	
+	printf("NodeId: %d\n", re->nodeId);
+	printf("TTL: %d\n", re->ttl);
+	printf("Seq Num received: %d\n", re->seqNumReceive);
+	printf("Number of files: %d\n", re->numFiles);
+	printf("Number of links: %d\n", re->numLinks);
+}
+
+int resolvNeighbor(struct sockaddr_in cli_addr){
+
+	printf("The host is: %s\n",inet_ntoa(cli_addr.sin_addr));
+	printf("The port is: %d\n", ntohs(cli_addr.sin_port));
+	
+	node* curr = routing.head;
+	while( curr != NULL){
+		routingEntry* re = (routingEntry *)curr->data;
+		if( re->isNeighbor){
+			if( strcmp(re->hostName, inet_ntoa(cli_addr.sin_addr)) == 0 && re->routingPort ==ntohs(cli_addr.sin_port) ){
+				return re->nodeId;
+			}
+		}
+		curr = curr->next;
+	}
+	
+	return -1;
+}
+
+
+void decreaseTTL(){
+	node* curr = routing.head;
+	while ( curr != NULL ){
+		routingEntry* entryp = (routingEntry *)curr->data;
+		entryp->ttl -= 1;
+		curr = curr->next;
+	}
+}
+
 int close_socket(int sock)
 {
     if (close(sock))
