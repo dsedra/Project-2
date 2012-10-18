@@ -7,11 +7,11 @@
 #include <netinet/ip.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <netdb.h>
 #include "linkedList.h"
 #include "packet.h"
 
 #define mynode1Conf "own.conf"
-#define mynodeID 50
 #define mynode1Files "node1.files"
 
 #define myroutingPort 6005
@@ -23,10 +23,14 @@
 linkedList fileList;
 linkedList routing;
 linkedList reSendList;
-int seqNumSend;
 
-int advCycle = 10000 ;
-int retranCycle = 120 ;
+int numDeferMessages;
+
+int advCycle = 10;
+int retranCycle = 3;
+int neighborTimeout = 30;
+int LSATimeout = 30;
+int mynodeID = 50;
 
 typedef struct timeStruct{	
 	int timeout;
@@ -58,6 +62,7 @@ int runTimer(int timeout){
 }
 
 int main(int argc, char** argv){
+	
     FILE* conf;
     FILE* files;
     char buf[256];
@@ -68,7 +73,6 @@ int main(int argc, char** argv){
 	int numFiles;
 	numNeighbors = 0;
 	numFiles = 0;
-	seqNumSend = 1;
 	
 	
 	// these are for TCP listening
@@ -130,10 +134,7 @@ int main(int argc, char** argv){
     /* initialize our */
     routingEntry* usp = initRE(mynodeID, 0,"127.0.0.1",
                            myroutingPort,mylocalPort,myserverPort, 0);
-    
-    insert(&routing, usp, sizeof(routingEntry));
-       
-
+	usp->seqNumSend=0;
     while(fgets(buf,sizeof(buf),conf)){
      int nodeID,routingPort,localPort,serverPort; 
      char hostName[200]; 	
@@ -144,10 +145,20 @@ int main(int argc, char** argv){
         
         neighbor = initRE(nodeID,0,hostName,routingPort,localPort,serverPort, 1);
         
+		struct hostent *h;
+		if((h = gethostbyname(hostName))==NULL) {
+			printf("error resolving host\n");
+			break;
+		}
+		memset(&neighbor->cli_addr, '\0', sizeof(neighbor->cli_addr));
+	   	neighbor->cli_addr.sin_family = AF_INET;
+		neighbor->cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
+  		neighbor->cli_addr.sin_port = htons(routingPort);
+		neighbor->neighborCountDown = neighborTimeout;
         insert(&routing, neighbor, sizeof(routingEntry));
 		// might not add the struct but add nodeID
 		insert(usp->neighbors, &nodeID, sizeof(int));
-		numNeighbors++; 
+		usp->numLinks++; 
     }
     
     while(fgets(buf,sizeof(buf),files)){
@@ -162,14 +173,26 @@ int main(int argc, char** argv){
         ourFiles = initFL(objectName,path);
         insert(&fileList, ourFiles, sizeof(fileEntry));
 		insert(usp->objects, objectName, 9);
-		numFiles++;
+		usp->numFiles++;
    	}	
 	
+	insert(&routing, usp, sizeof(routingEntry));
+	routingEntry* me = getRoutingEntry(&routing, mynodeID);
     fclose(conf);
     fclose(files);
        
     printRouting(routing);
-	printFile(fileList);	
+	printFile(fileList);
+	
+	// here we setup the resend message list	
+	int u;
+	numDeferMessages = 0;
+	for(u = 0; u< me->numLinks ; u++){
+		deferredMessage* df;
+		df = malloc(sizeof(deferredMessage));
+		df->inUse = 0;
+		insert(&reSendList, df, sizeof(deferredMessage));
+	}
 	
 	// create a TCP socket, and listen on it
 	localSocket = socket(PF_INET, SOCK_STREAM, 0);
@@ -191,8 +214,6 @@ int main(int argc, char** argv){
     }
 	fprintf(stdout, "----- Routing Start -----\n");
 	
-	printf("local socket is: %d\n", localSocket);
-	
 	// create a UDP socket
     remoteSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     udpAddr.sin_family = AF_INET;
@@ -206,12 +227,14 @@ int main(int argc, char** argv){
         return EXIT_FAILURE;
     }
 	
-	int advTimer = runTimer(advCycle);
 	
+	int advTimer = runTimer(advCycle);
+	int reTranTimer = runTimer( retranCycle );
 	FD_SET(remoteSocket, &master);
 	FD_SET(localSocket, &master);
 	FD_SET(advTimer, &master);
-	fdmax = advTimer;
+	FD_SET(reTranTimer, &master);
+	fdmax = reTranTimer;
 	
 	while(1){
 		sockList = master;
@@ -248,14 +271,16 @@ int main(int argc, char** argv){
 					else{
 						char* ptr;
 						ptr = readHeader(udpReadBuf, &ttlUDP, &typeUDP, &senderIdUDP, &seqNumberUDP, &numLinksUDP, &numFilesUDP);
-						routingEntry* re = getRoutingEntry(&routing, senderIdUDP);
-						
 						int packetSize = 20+ numLinksUDP*sizeof(int) + numFilesUDP*9;
-						
-						if ( typeUDP == 1 ){
+						int neighborId = resolvNeighbor(outAddr);
+							
+						if ( typeUDP == 0 ){
 							int count;
 							char objectName[9];
 							int nodeId;
+							routingEntry* re = getRoutingEntry(&routing, senderIdUDP);
+						// Here we start to send Ack, no matter whether it give new updates or not
+							sendAck( remoteSocket, senderIdUDP, seqNumberUDP, outAddr);
 						if( re == NULL){
 							// which means this is a new node that is not my neighbor
 							re = initRE(senderIdUDP, 0, "", -1 , -1, -1, 0);
@@ -271,18 +296,34 @@ int main(int argc, char** argv){
 							re->seqNumReceive = seqNumberUDP;
 							re->numFiles = numFilesUDP;
 							re->numLinks = numLinksUDP;
-							printf("Receive a new Node");
-							printRoutingEntry(re);
+							re->LSACountDown = LSATimeout;
+							
+							printf("Receive a new Node %d\n", senderIdUDP);
+							
+							//printRoutingEntry(re);
 							insert(&routing, re, sizeof(routingEntry));
-							int neighborId = resolvNeighbor(outAddr);
-							forward(remoteSocket, udpReadBuf, packetSize, neighborId);
+							forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
 							printRouting(routing);
 							
 						}else{
-							// here we get some updates for this node
-							printf("Sender's id: %d\n", senderIdUDP);
-							printf("ttlUDP: %d\n", (int)ttlUDP);
 							
+							// Here we need to check TTL 0 first
+							
+							if ( ttlUDP == 0){
+								printf("***Deleting LSA of node %d\n", re->nodeId);
+								deleteRoutingEntry(re->nodeId);
+								printRouting(routing);
+								continue;
+							}
+							if ( re->isNeighbor){
+								re->neighborCountDown = neighborTimeout;
+								re->isDown = 0;
+							}else{
+								re->LSACountDown = LSATimeout;
+							}
+							
+							printf("Receive LSP from %d\n", senderIdUDP);
+							// here we get some updates for this node
 							if( re->seqNumReceive < seqNumberUDP){
 								
 								// we need to clear its neighbors and objects list
@@ -302,17 +343,26 @@ int main(int argc, char** argv){
 								re->seqNumReceive = seqNumberUDP;
 								re->numFiles = numFilesUDP;
 								re->numLinks = numLinksUDP;
-								printRoutingEntry(re);
-								int neighborId = resolvNeighbor(outAddr);
-								forward(remoteSocket, udpReadBuf, packetSize, neighborId);
+								printRouting(routing);
+								// here neighbor Id is an exclusion
+								forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
 							}	
 						}// end else
+						
 						}// end if type == 1
 						// This is Ack
 						else{
-							re->seqNumAck++;
-							// after receive this, we may clear 
-							// the buffer that contains the deferred information
+							// ack must come from our neighbors
+							//routingEntry* myNeighbor = getRoutingEntry(&routing, neighborId);
+							printf("Receive Ack from neighbor %d\n", neighborId);
+							printf("TTL is %d\n", ttlUDP);
+							printf("Type is %u\n", typeUDP);
+							printf("senderId is %d\n", senderIdUDP);
+							printf("seq num is %d\n", seqNumberUDP);
+							
+							removeFromResendList(senderIdUDP, neighborId);
+							
+							
 							
 						}
 					}
@@ -320,12 +370,23 @@ int main(int argc, char** argv){
 				}
 				// It is time to send advertisement
 				else if(i == advTimer){
-					printf("Timer fires up !\n");
+					printf("Advertise timer fires up !\n");
 					read(advTimer,buf,sizeof(buf));
 					printf("Start to advertise !\n");
-					advertise( remoteSocket, mynodeID, numNeighbors, numFiles);				
+					// here decrease the counter for each neighbor and LSA
+					countDown(remoteSocket);
+					advertise( remoteSocket, me->numLinks, me->numFiles);	
+					
+					
+								
 				}
-				else{
+				
+			   else if(i == reTranTimer ){
+					read(reTranTimer,buf,sizeof(buf));
+					printf("Retran timer fires up!\n");
+					doReTransmit(remoteSocket);
+			    }
+			  else{
 					if((re = recv(i, buffer, sizeof(buffer)-1, 0)) <= 0){
 						//FD_CLR(i, &master);
 						//if(clientArr[i] != NULL)
@@ -369,12 +430,9 @@ int main(int argc, char** argv){
 										memset(method, '\0', 10);
 										memset(objectName, '\0', 100);
 										memset(path,'\0', 100);
-										numFiles++;
 										
-										//routingEntry* us = getRoutingEntry(&routing,mynodeID);
-										
-										seqNumSend++;
-										advertise( remoteSocket, mynodeID, numNeighbors, numFiles);
+										me->numFiles++;
+										advertise( remoteSocket, me->numLinks, me->numFiles);
 									} 
 									
 									

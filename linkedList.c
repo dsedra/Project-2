@@ -22,11 +22,12 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int 
 	//newp->seqNumSend = 0;
 	newp->seqNumAck = 0;
 	newp->seqNumReceive = 0;
+	newp->numFiles = 0;
+	newp->numLinks = 0;
+	newp->isDown = 0;
 	
 	newp->neighbors = malloc(sizeof(linkedList));
 	newp->objects = malloc(sizeof(linkedList));
-	
-	
 	newp->neighbors->head = NULL;
 	newp->neighbors->tail = NULL;
 	
@@ -61,6 +62,39 @@ void insert(linkedList* list, void* data, int size){
 		list->tail->next = n;
 		list->tail = n;
 	}
+}
+
+void deleteRoutingEntry(int nodeId){
+	
+	node* head = routing.head;
+	
+	routingEntry* re = (routingEntry*) head->data;
+	if( re->nodeId == nodeId ){
+		if( routing.head == routing.tail ){
+			free(head);
+			routing.head = NULL;
+			routing.tail = NULL;
+		}else{
+			routing.head = routing.head->next;
+			head->next = NULL;
+			free(head);
+		}
+		return;
+	}
+	
+	node* curr = routing.head;
+	node* pre;
+	while( curr != NULL){
+		re = (routingEntry*) curr->data;
+		if( re->nodeId == nodeId ){
+			pre->next = curr->next;
+			curr->next = NULL;
+			freeNode(curr);
+			return;
+		}
+		pre = curr;
+		curr = curr->next;
+	}	
 }
 
 fileEntry* getFileEntry(linkedList* list, char* obj){
@@ -126,7 +160,6 @@ node* freeNode(node* n){
 void freeList(linkedList* list){
 	node* curr = list->head;
 	while( curr != NULL ){
-		
 		curr = freeNode( curr );
 	}
 	list->head = NULL;
@@ -156,7 +189,19 @@ void printRouting(linkedList list){
 		curr = entryp->neighbors->head;
 		while( curr != NULL){
 			int* nb = (int*) curr->data;
-			printf("---Neighbor %d\n", *nb);
+			
+			routingEntry* re = getRoutingEntry(&routing, *nb);
+			char* status = "LIVE";
+			if( re != NULL){
+				if(re->isNeighbor && re->isDown){
+					status = "DEAD";
+				}
+				printf("---Neighbor %d   %s\n", *nb , status);
+			}else{
+				printf("---Neighbor %d\n", *nb);
+			}
+			
+			
 			curr = curr->next;
 		}
         currentp = currentp->next;
@@ -174,10 +219,8 @@ void printRoutingEntry(routingEntry* re){
 }
 
 int resolvNeighbor(struct sockaddr_in cli_addr){
-
-	printf("The host is: %s\n",inet_ntoa(cli_addr.sin_addr));
-	printf("The port is: %d\n", ntohs(cli_addr.sin_port));
-	
+	//printf("The host is: %s\n",inet_ntoa(cli_addr.sin_addr));
+	//printf("The port is: %d\n", ntohs(cli_addr.sin_port));
 	node* curr = routing.head;
 	while( curr != NULL){
 		routingEntry* re = (routingEntry *)curr->data;

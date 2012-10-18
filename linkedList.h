@@ -28,7 +28,6 @@ typedef struct re{
 	linkedList* neighbors;
 	linkedList* objects;
 	
-	
 	struct re* parent;
 	int visited;
 	// below are normal information
@@ -38,12 +37,18 @@ typedef struct re{
 	int localPort;
 	int serverPort;
 	int isNeighbor;
+	int seqNumSend;
 	int seqNumAck;
 	int seqNumReceive;
 	int ttl;
 	int numFiles;
 	int numLinks;
 	
+	struct sockaddr_in cli_addr;
+	int neighborCountDown;
+	int LSACountDown;
+	int isDown;
+
 }routingEntry;
 
 typedef struct client{
@@ -54,10 +59,13 @@ typedef struct client{
 extern linkedList fileList;
 extern linkedList routing;
 extern linkedList reSendList;
-extern int seqNumSend;
+extern int numDeferMessages;
+extern int mynodeID;
+extern int advCycle; 
 
 
 void insert( linkedList* list, void* data, int size);
+void deleteRoutingEntry(int nodeId);
 fileEntry* getFileEntry(linkedList* list, char* obj);
 routingEntry* getRoutingEntry( linkedList* list, int nodeId );
 routingEntry* pop( linkedList* list );

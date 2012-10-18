@@ -80,7 +80,7 @@ char* addNodeIds(char* start, int myId){
 	
 	while( curr != NULL ){
 		routingEntry* re = (routingEntry*)curr->data;
-		if( re->nodeId != myId){
+		if( re->nodeId != myId && re->isNeighbor && !re->isDown){
 		addInt(re->nodeId, ptr);
 		ptr += sizeof(int);
 		}
@@ -89,10 +89,9 @@ char* addNodeIds(char* start, int myId){
 	return ptr;
 }
 
-char* addHeader(char* start, short type, int senderId, int seqNum, int numLinks, int numFiles){
+char* addHeader(char* start, int ttl, short type, int senderId, int seqNum, int numLinks, int numFiles){
 	char* ptr = start;
 	ptr = addChar('1', ptr);
-	int ttl = 32;
 	ptr = addChar((char)ttl,ptr);
 	ptr = addShort(type, ptr);
 	ptr = addInt(senderId, ptr);
@@ -130,19 +129,50 @@ void freeBuffer(char* buf){
 	}
 }
 
-void decreaseCountDown(int udp){
-	
+deferredMessage* isExist( int senderId, int recieverId ){
 	node* curr = reSendList.head;
-	
+	deferredMessage* result;
+	result = NULL;
 	while( curr != NULL ){
-		deferredMessage* df =(deferredMessage* ) curr->data;
-		df->reTranCountDown -= advCycle;
-		
-		if( df->reTranCountDown == 0){
-			// here resend
-		} 
-		
+		deferredMessage* df = (deferredMessage* ) curr->data;
+		if( df->inUse == 1 &&  df->receiverId == recieverId && df->senderId == senderId){
+			return df;
+		}
+		if( df->inUse == 0){
+			result = df;
+		}
 		curr = curr->next;
+	}
+	
+	// this is non-exist sender, and now there is now empty spot
+	if( result == NULL ){
+		result = malloc(sizeof(deferredMessage));
+	}
+	result->inUse = 0;
+	insert(&reSendList, result, sizeof(deferredMessage));
+	return result;
+}
+
+void addToResendList(int senderId, int receiverId){
+	deferredMessage* df = isExist( senderId, receiverId); 
+	if( df ){
+		// it means we find empty spot for this nonExist receiver
+		if(df->inUse != 1){
+		printf("Add neighbor %d to resend list\n", receiverId);
+		df->inUse = 1;
+		df->senderId = senderId;
+		df->receiverId = receiverId;
+		numDeferMessages ++ ;
+		}
+	}
+}
+
+void removeFromResendList( int senderId, int receiverId ){
+	deferredMessage* df = isExist( senderId , receiverId);
+	if( df ){
+		printf("Remove neighbor %d from resend list\n", receiverId);
+		df->inUse = 0;
+		numDeferMessages -- ;
 	}
 }
 
@@ -151,8 +181,7 @@ void reTransmit(int udp, int receiverId, int senderId ){
 	char* ptr;
 	if( re != NULL ){
 		char* sendBuf = createPacket(re->numLinks , re->numFiles);
-		ptr = addHeader(sendBuf, 1, senderId, re->seqNumReceive, re->numLinks, re->numFiles);
-		
+		ptr = addHeader(sendBuf, 32, 0, senderId, re->seqNumReceive, re->numLinks, re->numFiles);
 		node* curr = re->neighbors->head;
 		while( curr != NULL ){
 			int* id = (int* )curr->data;
@@ -168,34 +197,32 @@ void reTransmit(int udp, int receiverId, int senderId ){
 			curr = curr->next;
 		}
 		routingEntry* neighborToReceive = getRoutingEntry( &routing, receiverId );
-		if( neighborToReceive!= NULL ){
-			struct sockaddr_in cli_addr;
-			struct hostent *h;
-			if((h = gethostbyname(re->hostName))==NULL) {
-				printf("error resolving host\n");
-				return;
-			}
-			memset(&cli_addr, '\0', sizeof(cli_addr));
-			cli_addr.sin_family = AF_INET;
-			cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
-			cli_addr.sin_port = htons(neighborToReceive->routingPort);
-			ssize_t sen;
-			int packetSize = ptr - sendBuf + 1;
-			
-			sen = sendto(udp, sendBuf ,packetSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
-			if(sen <= 0 ){
-				printf("This is really bad\n");
-			}
+		if( neighborToReceive!= NULL ){	
+		    ssize_t sen;
+ 		    int packetSize = ptr - sendBuf + 1;
+ 		   				
+ 		   	sen = sendto(udp, sendBuf ,packetSize, 0, (struct sockaddr *)&(neighborToReceive->cli_addr), sizeof(neighborToReceive->cli_addr));
+ 		   	if(sen <= 0 ){
+ 		   		printf("This is really bad\n");
+ 		   	}
 		}
 		freeBuffer(sendBuf);
 	}
 }
 
+void doReTransmit(int udp){
+	node* curr = reSendList.head;
+	while( curr != NULL ){
+		deferredMessage* df = (deferredMessage* ) curr->data;
+		if( df->inUse == 1 ){
+			printf("Retransmit to node %d\n", df->receiverId);
+			reTransmit(udp, df->receiverId, df->senderId);
+		}
+		curr = curr->next;
+	}
+}
 
-
-
-void forward(int udp, char* packet, int packetSize, int excludeId){
-	
+void forward(int udp, char* packet, int packetSize, int senderId, int excludeId){
 	// here drease the TTL by one
 	char* ttl = packet+1;
 	*ttl = *(ttl)-1;
@@ -203,75 +230,61 @@ void forward(int udp, char* packet, int packetSize, int excludeId){
 	node* curr = routing.head;
 	while( curr != NULL ){
 		routingEntry* re = (routingEntry*)curr->data;
-		if (re->isNeighbor && re->nodeId != excludeId){
-			struct sockaddr_in cli_addr;
-			struct hostent *h;
-			
-			if((h = gethostbyname(re->hostName))==NULL) {
-				printf("error resolving host\n");
-				return;
-			}
-			memset(&cli_addr, '\0', sizeof(cli_addr));
-			cli_addr.sin_family = AF_INET;
-			cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
-			cli_addr.sin_port = htons(re->routingPort);
-			
+		if (re->isNeighbor && re->nodeId != excludeId && !re->isDown){
+		
 			ssize_t sen;
 			printf("Start to forward to node %d\n", re->nodeId);
-			sen = sendto(udp, packet ,packetSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
+			sen = sendto(udp, packet ,packetSize, 0, (struct sockaddr *)&(re->cli_addr), sizeof(re->cli_addr));
 			if(sen <= 0 ){
 				printf("This is really bad\n");
 			}
 			
 			// add each advertisement into a buffer, assumed that they are not acked yet
 			// when receive ack, remove them from the buffer
-			deferredMessage* msg = malloc(sizeof(deferredMessage));
-			msg->receiverId = re->nodeId;
-			msg->senderId = excludeId;
-			msg->reTranCountDown = retranCycle;
-		
-			insert(&reSendList, msg, sizeof(deferredMessage));
+			addToResendList(senderId, re->nodeId);
 		}
 		curr = curr->next;
 	}
 }
 
+void sendAck(int udp, int senderId, int seqNum, struct sockaddr_in cli_addr){
+	char* ack = malloc(3*sizeof(int));
+	char* ptr = ack;
+	ptr = addChar('1', ptr);
+	ptr = addChar(32,ptr);
+	ptr = addShort(1, ptr);
+	ptr = addInt(senderId, ptr);
+	ptr = addInt(seqNum, ptr);
+	
+	int ackSize = ptr - ack + 1;
+	ssize_t sen;
+	sen = sendto(udp, ack, ackSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
+	if(sen <= 0 ){
+		printf("This is really bad\n");
+	}
+}
 
-void advertise(int udp , int senderId, int numLinks, int numFiles){
+
+void advertise(int udp, int numLinks, int numFiles){
 	node* curr = routing.head;
 	char* ptr;
+	routingEntry* me = getRoutingEntry(&routing, mynodeID);
+	me->seqNumSend++;
 	
 	while( curr != NULL ){
 		routingEntry* re = (routingEntry*)curr->data;
-		if (re->isNeighbor ){
-			
-			
-			struct sockaddr_in cli_addr;
-			struct hostent *h;
-			
-			if((h = gethostbyname(re->hostName))==NULL) {
-				printf("error resolving host\n");
-				return;
-			}
-			memset(&cli_addr, '\0', sizeof(cli_addr));
-			cli_addr.sin_family = AF_INET;
-			cli_addr.sin_addr.s_addr = *(in_addr_t *)h->h_addr;
-			cli_addr.sin_port = htons(re->routingPort);
-			
+		if (re->isNeighbor){
 			char* sendBuf = createPacket(numLinks, numFiles);
-			ptr = addHeader(sendBuf, 1, senderId, seqNumSend, numLinks, numFiles);
-			printBuf(sendBuf, ptr-sendBuf+1);
+			ptr = addHeader(sendBuf, 32, 0, mynodeID, me->seqNumSend, me->numLinks, me->numFiles);
 			//printf("Header length is %ld\n", ptr-sendBuf+1);
-			ptr = addNodeIds(ptr, senderId);
-			printBuf(sendBuf, ptr-sendBuf+1);
+			ptr = addNodeIds(ptr, mynodeID);
 			//printf("header + Nodes length is %ld\n", ptr-sendBuf+1);
 			ptr = addFiles(ptr);
 			int packetSize = ptr-sendBuf+1;
 			printf("The packet length is %d\n",packetSize );
-			
-			printBuf(sendBuf, packetSize);
 			ssize_t sen;
-			sen = sendto(udp, sendBuf,packetSize, 0, (struct sockaddr *)&cli_addr, sizeof(cli_addr));
+			printf("Advertise to node %d\n", re->nodeId);
+			sen = sendto(udp, sendBuf,packetSize, 0, (struct sockaddr *)&(re->cli_addr), sizeof(re->cli_addr));
 			//printf("Send to node %d on port %d\n", re->nodeId, re->routingPort);
 			if(sen <= 0 ){
 				printf("This is really bad\n");
@@ -279,19 +292,61 @@ void advertise(int udp , int senderId, int numLinks, int numFiles){
 			
 			// add each advertisement into a buffer, assumed that they are not acked yet
 			// when receive ack, remove them from the buffer
-			deferredMessage* msg = malloc(sizeof(deferredMessage));
-			msg->receiverId = re->nodeId;
-			msg->senderId = senderId;
-			msg->reTranCountDown = retranCycle;
-			insert(&reSendList, msg, sizeof(deferredMessage));
-			
+			addToResendList(mynodeID, re->nodeId);
 			freeBuffer(sendBuf);
 		}
 		curr = curr->next;
 	}
-	
-
 }
+
+void countDown(int udp){
+	node* curr = routing.head;
+	while( curr != NULL ){
+		routingEntry* re = (routingEntry* )curr->data;
+		if( re->isNeighbor && !re->isDown){
+			re->neighborCountDown -= advCycle;
+			printf("Time limit for neighbor %d : %d\n", re->nodeId, re->neighborCountDown);
+			if( re->neighborCountDown == 0 ){
+			char* sendBuf = createPacket(re->numLinks, re->numFiles);
+			char* ptr = sendBuf;
+			ptr = addHeader(sendBuf,1,0, re->nodeId, re->seqNumReceive, re->numLinks, re->numFiles);
+			
+			node* curr2 = re->neighbors->head;
+			while( curr2 != NULL ){
+				int* id = (int* )curr2->data;
+			 	addInt(*id, ptr);
+				ptr += sizeof(int);
+				curr2 = curr2->next;
+			}
+			curr2 = re->objects->head;
+			while( curr2 != NULL ){
+				char* objectName = (char* )curr2->data;
+				addString(objectName, ptr);
+				ptr+=9;
+				curr2 = curr2->next;
+			}
+			
+			int packetSize = ptr - sendBuf + 1;
+			forward(udp, sendBuf, packetSize, re->nodeId, re->nodeId);
+			re->isDown = 1;
+			//need to dcrease numlinks in us node
+			routingEntry* me = getRoutingEntry(&routing, mynodeID);
+			me->numLinks--;
+			printf("Neighbor %d is down\n", re->nodeId);
+			}	
+		}
+		else if( !re->isNeighbor && re->nodeId != mynodeID){
+			re->LSACountDown -= advCycle;
+			printf("Time limit for LSA from node %d : %d\n", re->nodeId, re->LSACountDown);
+			
+			
+			
+		}
+		curr = curr->next;
+	}	
+}
+
+
 
 void printLinkEnt(char* buf, int numLinks){
 	int i;
@@ -309,16 +364,3 @@ void printFileEnt(char* buf, int numFiles){
 		printf("file entry %d is %s",i,buf + 9*i);
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
