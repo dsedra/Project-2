@@ -10,8 +10,8 @@
 #include "linkedList.h"
 #include "packet.h"
 
-#define mynode1Conf "Node1.conf"
-#define mynodeID 50
+#define mynode1Conf "own.conf"
+#define mynodeID 51
 #define mynode1Files "node1.files"
 
 #define myroutingPort 6005
@@ -199,7 +199,7 @@ int main(int argc, char** argv){
         return EXIT_FAILURE;
     }
 	
-	int advTimer = runTimer(5);
+	int advTimer = runTimer(10);
 	
 	FD_SET(remoteSocket, &master);
 	FD_SET(localSocket, &master);
