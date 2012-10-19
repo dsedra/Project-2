@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 typedef struct node_s{
 	void* data;
@@ -23,6 +26,8 @@ typedef struct re{
 	int nodeId;
 	int nextHop;
 	linkedList* neighbors;
+	linkedList* objects;
+	
 	struct re* parent;
 	int visited;
 	// below are normal information
@@ -34,8 +39,16 @@ typedef struct re{
 	int isNeighbor;
 	int seqNumSend;
 	int seqNumAck;
-	int seqNumRecieve;
+	int seqNumReceive;
+	int ttl;
+	int numFiles;
+	int numLinks;
 	
+	struct sockaddr_in cli_addr;
+	int neighborCountDown;
+	int LSACountDown;
+	int isDown;
+
 }routingEntry;
 
 typedef struct client{
@@ -45,8 +58,14 @@ typedef struct client{
 
 extern linkedList fileList;
 extern linkedList routing;
+extern linkedList reSendList;
+extern int numDeferMessages;
+extern int mynodeID;
+extern int advCycle; 
+
 
 void insert( linkedList* list, void* data, int size);
+void deleteRoutingEntry(int nodeId);
 fileEntry* getFileEntry(linkedList* list, char* obj);
 routingEntry* getRoutingEntry( linkedList* list, int nodeId );
 routingEntry* pop( linkedList* list );
@@ -54,6 +73,11 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort,int l
 void printRouting(linkedList list);
 void printFile(linkedList list);
 fileEntry* initFL(char* objectName, char* path);
+void freeList(linkedList* list);
+node* freeNode(node* n);
+void printRoutingEntry(routingEntry* re);
+void decreaseTTL();
+int resolvNeighbor(struct sockaddr_in cli_addr);
 int close_socket(int sock);
 
 #endif
