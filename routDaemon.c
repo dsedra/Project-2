@@ -317,7 +317,10 @@ int main(int argc, char** argv){
 							}
 							if ( re->isNeighbor){
 								re->neighborCountDown = neighborTimeout;
-								re->isDown = 0;
+								if( re->isDown == 1){
+									re->isDown = 0;
+									me->numLinks ++;
+								}
 							}else{
 								re->LSACountDown = LSATimeout;
 							}
@@ -365,9 +368,6 @@ int main(int argc, char** argv){
 							printf("seq num is %d\n", seqNumberUDP);
 							
 							removeFromResendList(senderIdUDP, neighborId);
-							
-							
-							
 						}
 					}
 					
@@ -381,8 +381,6 @@ int main(int argc, char** argv){
 					countDown(remoteSocket);
 					advertise( remoteSocket, me->numLinks, me->numFiles);	
 					
-					
-								
 				}
 				
 			   else if(i == reTranTimer ){
