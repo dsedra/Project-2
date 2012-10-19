@@ -30,7 +30,7 @@ int advCycle = 10;
 int retranCycle = 3;
 int neighborTimeout = 30;
 int LSATimeout = 30;
-int mynodeID = 50;
+int mynodeID = 52;
 
 typedef struct timeStruct{	
 	int timeout;
