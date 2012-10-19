@@ -82,8 +82,8 @@ void deleteRoutingEntry(int nodeId){
 		return;
 	}
 	
-	node* curr = routing.head;
-	node* pre;
+	node* curr = routing.head->next;
+	node* pre = routing.head;
 	while( curr != NULL){
 		re = (routingEntry*) curr->data;
 		if( re->nodeId == nodeId ){

@@ -35,4 +35,5 @@ char* readShort(short* val, char* buf);
 char* readString(char str[9], char* buf);
 char* readHeader(char* start, char* ttl, short* type, int* senderId, int* seqNum, int* numLinks, int* numFiles);
 void countDown(int udp);
+void reTransmit(int udp, int receiverId, int senderId );
 #endif
