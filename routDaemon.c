@@ -264,7 +264,7 @@ int main(int argc, char** argv){
 					memset(&outAddr, '\0', sizeof(outAddr));
 					unsigned int clilen;
 					clilen = sizeof(outAddr);
-					if((re = recvfrom(remoteSocket, udpReadBuf, 1500, 0, (struct sockaddr *)&outAddr, &clilen)) < 0){
+					if((recvfrom(remoteSocket, udpReadBuf, 1500, 0, (struct sockaddr *)&outAddr, &clilen)) < 0){
 						//error stuff
 						printf("receive from udp failed");
 					}
