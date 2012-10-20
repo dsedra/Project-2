@@ -14,10 +14,6 @@
 #define mynode1Conf "own.conf"
 #define mynode1Files "node1.files"
 
-#define myroutingPort 6005
-#define mylocalPort 5000
-#define myserverPort 8080
-
 #define max(a,b) ((a>b)?a:b)
 
 linkedList fileList;
@@ -132,8 +128,8 @@ int main(int argc, char** argv){
     }
        
     /* initialize our */
-    routingEntry* usp = initRE(mynodeID, 0,"127.0.0.1",
-                           myroutingPort,mylocalPort,myserverPort, 0);
+	routingEntry* usp;
+
     while(fgets(buf,sizeof(buf),conf)){
      int nodeID,routingPort,localPort,serverPort; 
      char hostName[200]; 	
@@ -142,8 +138,12 @@ int main(int argc, char** argv){
             break;
         }
         
+		if ( nodeID == mynodeID){
+			usp = initRE(mynodeID, 0,hostName,
+		                           routingPort,localPort,serverPort, 0);
+		}else{
+
         neighbor = initRE(nodeID,0,hostName,routingPort,localPort,serverPort, 1);
-        
 		struct hostent *h;
 		if((h = gethostbyname(hostName))==NULL) {
 			printf("error resolving host\n");
@@ -155,9 +155,7 @@ int main(int argc, char** argv){
   		neighbor->cli_addr.sin_port = htons(routingPort);
 		neighbor->neighborCountDown = neighborTimeout;
         insert(&routing, neighbor, sizeof(routingEntry));
-		// might not add the struct but add nodeID
-		insert(usp->neighbors, &nodeID, sizeof(int));
-		usp->numLinks++; 
+		}
     }
     
     while(fgets(buf,sizeof(buf),files)){
@@ -179,7 +177,22 @@ int main(int argc, char** argv){
 	routingEntry* me = getRoutingEntry(&routing, mynodeID);
     fclose(conf);
     fclose(files);
-       
+      
+	// here we add neighbors into me node
+	node* trav = routing.head;
+	while( trav != NULL ){
+		routingEntry* re = (routingEntry* ) trav->data;
+		if( re->isNeighbor ){
+			int nId = re->nodeId;
+			insert(me->neighbors, &nId, sizeof(int));
+			me->numLinks++;
+		}
+		trav = trav->next;
+	}
+
+	printf("hostName: %s localPort: %d routingPort: %d serverPort: %d\n", \
+	 me->hostName, me->localPort, me->routingPort, me->serverPort);
+
     printRouting(routing);
 	printFile(fileList);
 	
@@ -196,7 +209,7 @@ int main(int argc, char** argv){
 	// create a TCP socket, and listen on it
 	localSocket = socket(PF_INET, SOCK_STREAM, 0);
 	cgiAddr.sin_family = AF_INET;
-    cgiAddr.sin_port = htons(mylocalPort);
+    cgiAddr.sin_port = htons(me->localPort);
     cgiAddr.sin_addr.s_addr = INADDR_ANY;
 	cgiAddrLength = sizeof(cgiAddr);
 	
@@ -216,7 +229,7 @@ int main(int argc, char** argv){
 	// create a UDP socket
     remoteSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     udpAddr.sin_family = AF_INET;
-    udpAddr.sin_port = htons(myroutingPort);
+    udpAddr.sin_port = htons(me->routingPort);
     udpAddr.sin_addr.s_addr = INADDR_ANY;
     udpAddrLength = sizeof(udpAddr);
     
@@ -402,7 +415,7 @@ int main(int argc, char** argv){
 								if( objLength == strlen(objectName) ){
 									fileEntry* fe = getFileEntry(&fileList, objectName);
 									if( fe != NULL){
-										sprintf(response, "OK %zd http://localhost:%d/%s", strlen(fe->path), myserverPort, fe->path);
+										sprintf(response, "OK %zd http://localhost:%d/%s", strlen(fe->path), me->serverPort, fe->path);
 									}else{
 										sprintf(response, "NOTFOUND 0 ");
 									}
