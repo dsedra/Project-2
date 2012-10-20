@@ -37,8 +37,8 @@ typedef struct re{
 	int localPort;
 	int serverPort;
 	int isNeighbor;
-	int seqNumSend;
-	int seqNumAck;
+	//int seqNumSend;
+	//int seqNumAck;
 	int seqNumReceive;
 	int ttl;
 	int numFiles;

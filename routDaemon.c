@@ -134,7 +134,6 @@ int main(int argc, char** argv){
     /* initialize our */
     routingEntry* usp = initRE(mynodeID, 0,"127.0.0.1",
                            myroutingPort,mylocalPort,myserverPort, 0);
-	usp->seqNumSend=0;
     while(fgets(buf,sizeof(buf),conf)){
      int nodeID,routingPort,localPort,serverPort; 
      char hostName[200]; 	
@@ -239,7 +238,7 @@ int main(int argc, char** argv){
 	while(1){
 		sockList = master;
 		int i;
-		printf("before select\n");
+		//printf("before select\n");
 		if(select(fdmax+1, &sockList, NULL, NULL, NULL) < 0){
 			fprintf(stderr, "Select failed.\n");
 			exit(1);
@@ -264,7 +263,7 @@ int main(int argc, char** argv){
 					memset(&outAddr, '\0', sizeof(outAddr));
 					unsigned int clilen;
 					clilen = sizeof(outAddr);
-					if((re = recvfrom(remoteSocket, udpReadBuf, 1500, 0, (struct sockaddr *)&outAddr, &clilen)) < 0){
+					if(recvfrom(remoteSocket, udpReadBuf, 1500, 0, (struct sockaddr *)&outAddr, &clilen) < 0){
 						//error stuff
 						printf("receive from udp failed");
 					}
@@ -279,9 +278,18 @@ int main(int argc, char** argv){
 							char objectName[9];
 							int nodeId;
 							routingEntry* re = getRoutingEntry(&routing, senderIdUDP);
-						// Here we start to send Ack, no matter whether it give new updates or not
+							// Here we start to send Ack, no matter whether it give new updates or not
 							sendAck( remoteSocket, senderIdUDP, seqNumberUDP, outAddr);
+							
+							// Here we need to check TTL 0 first
+							if ( ttlUDP == 0){
+								printf("***Deleting LSA of node %d\n", senderIdUDP);
+								deleteRoutingEntry(senderIdUDP);
+								printRouting(routing);
+								continue;
+							}
 						if( re == NULL){
+							printf("Receive a new Node %d\n", senderIdUDP);
 							// which means this is a new node that is not my neighbor
 							re = initRE(senderIdUDP, 0, "", -1 , -1, -1, 0);
 							for( count = 0 ; count < numLinksUDP ; count++){
@@ -293,13 +301,12 @@ int main(int argc, char** argv){
 								insert(re->objects, objectName, 9);
 							}
 							re->ttl = (int)ttlUDP;
+							
+						
 							re->seqNumReceive = seqNumberUDP;
 							re->numFiles = numFilesUDP;
 							re->numLinks = numLinksUDP;
-							re->LSACountDown = LSATimeout;
-							
-							printf("Receive a new Node %d\n", senderIdUDP);
-							
+							re->LSACountDown = LSATimeout;	
 							//printRoutingEntry(re);
 							insert(&routing, re, sizeof(routingEntry));
 							forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
@@ -307,17 +314,10 @@ int main(int argc, char** argv){
 							
 						}else{
 							
-							// Here we need to check TTL 0 first
-							
-							if ( ttlUDP == 0){
-								printf("***Deleting LSA of node %d\n", re->nodeId);
-								deleteRoutingEntry(re->nodeId);
-								printRouting(routing);
-								continue;
-							}
 							if ( re->isNeighbor){
 								re->neighborCountDown = neighborTimeout;
 								if( re->isDown == 1){
+									printf("Neighbor %d is back\n", re->nodeId);
 									re->isDown = 0;
 									me->numLinks ++;
 								}
@@ -325,7 +325,8 @@ int main(int argc, char** argv){
 								re->LSACountDown = LSATimeout;
 							}
 							
-							printf("Receive LSP from %d\n", senderIdUDP);
+							printf("Receive LSP from %d with senNum %d, my seqReceive %d\n", senderIdUDP, seqNumberUDP, re->seqNumReceive);
+				
 							// here we get some updates for this node
 							if( re->seqNumReceive < seqNumberUDP){
 								
@@ -351,6 +352,7 @@ int main(int argc, char** argv){
 								forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
 							}
 							else if(re->seqNumReceive > seqNumberUDP){
+								printf("***I receive smaller seq num %d expect %d from %d \n", seqNumberUDP, re->seqNumReceive , senderIdUDP);
 								int receiverId = resolvNeighbor(outAddr);
 								reTransmit(remoteSocket, receiverId, senderIdUDP);
 							}	
@@ -361,12 +363,7 @@ int main(int argc, char** argv){
 						else{
 							// ack must come from our neighbors
 							//routingEntry* myNeighbor = getRoutingEntry(&routing, neighborId);
-							printf("Receive Ack from neighbor %d\n", neighborId);
-							printf("TTL is %d\n", ttlUDP);
-							printf("Type is %u\n", typeUDP);
-							printf("senderId is %d\n", senderIdUDP);
-							printf("seq num is %d\n", seqNumberUDP);
-							
+							printf("Receive Ack from neighbor %d, seqentail number is %d\n", neighborId, seqNumberUDP);	
 							removeFromResendList(senderIdUDP, neighborId);
 						}
 					}
@@ -374,7 +371,7 @@ int main(int argc, char** argv){
 				}
 				// It is time to send advertisement
 				else if(i == advTimer){
-					printf("Advertise timer fires up !\n");
+					//printf("Advertise timer fires up !\n");
 					read(advTimer,buf,sizeof(buf));
 					printf("Start to advertise !\n");
 					// here decrease the counter for each neighbor and LSA
@@ -385,7 +382,7 @@ int main(int argc, char** argv){
 				
 			   else if(i == reTranTimer ){
 					read(reTranTimer,buf,sizeof(buf));
-					printf("Retran timer fires up!\n");
+					//printf("Retran timer fires up!\n");
 					doReTransmit(remoteSocket);
 			    }
 			  else{

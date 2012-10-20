@@ -20,7 +20,7 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int 
     newp->serverPort = serverPort;
 	newp->isNeighbor = isNeighbor;
 	//newp->seqNumSend = 0;
-	newp->seqNumAck = 0;
+	//newp->seqNumAck = 0;
 	newp->seqNumReceive = 0;
 	newp->numFiles = 0;
 	newp->numLinks = 0;
@@ -30,6 +30,9 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int 
 	newp->objects = malloc(sizeof(linkedList));
 	newp->neighbors->head = NULL;
 	newp->neighbors->tail = NULL;
+	newp->objects->head = NULL;
+	newp->objects->tail = NULL;
+	
 	
 
     return newp;
@@ -89,6 +92,7 @@ void deleteRoutingEntry(int nodeId){
 		if( re->nodeId == nodeId ){
 			pre->next = curr->next;
 			curr->next = NULL;
+			routing.tail = pre;
 			freeNode(curr);
 			return;
 		}

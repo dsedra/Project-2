@@ -200,7 +200,7 @@ void reTransmit(int udp, int receiverId, int senderId ){
 		if( neighborToReceive!= NULL ){	
 		    ssize_t sen;
  		    int packetSize = ptr - sendBuf + 1;
- 		   				
+			printf("Retrans from %d to %d\n", senderId ,receiverId);
  		   	sen = sendto(udp, sendBuf ,packetSize, 0, (struct sockaddr *)&(neighborToReceive->cli_addr), sizeof(neighborToReceive->cli_addr));
  		   	if(sen <= 0 ){
  		   		printf("This is really bad\n");
@@ -215,7 +215,7 @@ void doReTransmit(int udp){
 	while( curr != NULL ){
 		deferredMessage* df = (deferredMessage* ) curr->data;
 		if( df->inUse == 1 ){
-			printf("Retransmit to node %d\n", df->receiverId);
+			//printf("Retransmit to node %d\n", df->receiverId);
 			reTransmit(udp, df->receiverId, df->senderId);
 		}
 		curr = curr->next;
@@ -233,12 +233,11 @@ void forward(int udp, char* packet, int packetSize, int senderId, int excludeId)
 		if (re->isNeighbor && re->nodeId != excludeId && !re->isDown){
 		
 			ssize_t sen;
-			printf("Start to forward to node %d\n", re->nodeId);
+			printf("Start to forward packet from %d to node %d\n", senderId,re->nodeId);
 			sen = sendto(udp, packet ,packetSize, 0, (struct sockaddr *)&(re->cli_addr), sizeof(re->cli_addr));
 			if(sen <= 0 ){
 				printf("This is really bad\n");
 			}
-			
 			// add each advertisement into a buffer, assumed that they are not acked yet
 			// when receive ack, remove them from the buffer
 			addToResendList(senderId, re->nodeId);
@@ -269,13 +268,13 @@ void advertise(int udp, int numLinks, int numFiles){
 	node* curr = routing.head;
 	char* ptr;
 	routingEntry* me = getRoutingEntry(&routing, mynodeID);
-	me->seqNumSend++;
+	me->seqNumReceive++;
 	
 	while( curr != NULL ){
 		routingEntry* re = (routingEntry*)curr->data;
 		if (re->isNeighbor){
 			char* sendBuf = createPacket(numLinks, numFiles);
-			ptr = addHeader(sendBuf, 32, 0, mynodeID, me->seqNumSend, me->numLinks, me->numFiles);
+			ptr = addHeader(sendBuf, 32, 0, mynodeID, me->seqNumReceive, me->numLinks, me->numFiles);
 			//printf("Header length is %ld\n", ptr-sendBuf+1);
 			ptr = addNodeIds(ptr, mynodeID);
 			//printf("header + Nodes length is %ld\n", ptr-sendBuf+1);
@@ -311,6 +310,8 @@ void countDown(int udp){
 			char* ptr = sendBuf;
 			ptr = addHeader(sendBuf,1,0, re->nodeId, re->seqNumReceive, re->numLinks, re->numFiles);
 			
+			printf("**On behalf of %d",  re->nodeId);
+			
 			node* curr2 = re->neighbors->head;
 			while( curr2 != NULL ){
 				int* id = (int* )curr2->data;
@@ -321,6 +322,7 @@ void countDown(int udp){
 			curr2 = re->objects->head;
 			while( curr2 != NULL ){
 				char* objectName = (char* )curr2->data;
+				printf("**add file %s\n", objectName);
 				addString(objectName, ptr);
 				ptr+=9;
 				curr2 = curr2->next;
