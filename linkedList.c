@@ -91,8 +91,11 @@ void deleteRoutingEntry(int nodeId){
 		re = (routingEntry*) curr->data;
 		if( re->nodeId == nodeId ){
 			pre->next = curr->next;
+			if( curr->next == NULL){
+				routing.tail = pre;
+			}
 			curr->next = NULL;
-			routing.tail = pre;
+			
 			freeNode(curr);
 			return;
 		}
