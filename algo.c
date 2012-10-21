@@ -226,7 +226,10 @@ routingEntry* popQue(linkedList* que){
 		que->head = que->head->next;
 	}
 	temp->next = NULL;
-	return (routingEntry *)temp->data;
+	free(temp);
+	routingEntry* re = temp->data;
+	
+	return re;
 }
 
 routingEntry* getRoutingEntry( linkedList* list, int nodeId ){
@@ -246,9 +249,10 @@ void insert(linkedList* list, void* data, int size){
 	
 	node* n;
 	n = malloc( sizeof(node) );
-	n->data = malloc(size);
+	//n->data = malloc(size);
 	
-	memcpy(n->data, data, size);
+	//memcpy(n->data, data, size);
+	n->data = data;
 	n->next = NULL;
 	
 	if ( list->head == NULL ){

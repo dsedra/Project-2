@@ -183,8 +183,11 @@ int main(int argc, char** argv){
 	while( trav != NULL ){
 		routingEntry* re = (routingEntry* ) trav->data;
 		if( re->isNeighbor ){
-			int nId = re->nodeId;
-			insert(me->neighbors, &nId, sizeof(int));
+			//int nId = re->nodeId;
+			int* nId = malloc(sizeof(int));
+			*nId = re->nodeId;
+			printf("***add nodeid: %d\n", *nId);
+			insert(me->neighbors, nId, sizeof(int));
 			me->numLinks++;
 		}
 		trav = trav->next;

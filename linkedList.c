@@ -54,8 +54,8 @@ void insert(linkedList* list, void* data, int size){
 	node* n;
 	n = malloc( sizeof(node) );
 	n->data = malloc(size);
-	
 	memcpy(n->data, data, size);
+	//n->data = data;
 	n->next = NULL;
 	
 	if ( list->head == NULL ){
