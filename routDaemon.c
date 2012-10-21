@@ -186,18 +186,17 @@ int main(int argc, char** argv){
 			//int nId = re->nodeId;
 			int* nId = malloc(sizeof(int));
 			*nId = re->nodeId;
-			printf("***add nodeid: %d\n", *nId);
 			insert(me->neighbors, nId, sizeof(int));
 			me->numLinks++;
 		}
 		trav = trav->next;
 	}
 
-	printf("hostName: %s localPort: %d routingPort: %d serverPort: %d\n", \
+	printf("hostName: %s localPort: %d routingPort: %d serverPort: %d\n\n", \
 	 me->hostName, me->localPort, me->routingPort, me->serverPort);
-
+	
     printRouting(routing);
-	printFile(fileList);
+	//printFile(fileList);
 	
 	// here we setup the resend message list	
 	int u;
@@ -436,6 +435,7 @@ int main(int argc, char** argv){
 									if( pathLength == strlen(path)){
 										fileEntry* fe = initFL(objectName, path);
 										insert(&fileList, fe, sizeof(fileEntry));
+										insert(me->objects, objectName, 9);
 										sprintf(response, "OK 0 ");
 										ssize_t tmp;
 										if(( tmp = send(i, response, strlen(response), 0)) <= 0 ){

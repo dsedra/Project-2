@@ -185,35 +185,46 @@ void printFile(linkedList list){
     }
     
 }
-void printRouting(linkedList list){
-    node* currentp = list.head;
-    
+
+void printObjects(linkedList* list){
+	node* currentp = list->head;
+	printf("Objects: ");
     while(currentp != NULL){
-        routingEntry* entryp = (routingEntry *)currentp->data;
-		printf("%d\n", entryp->nodeId);
-	
-		node* curr;
-		curr = entryp->neighbors->head;
-		while( curr != NULL){
-			int* nb = (int*) curr->data;
-			
-			routingEntry* re = getRoutingEntry(&routing, *nb);
-			char* status = "LIVE";
-			if( re != NULL){
-				if(re->isNeighbor && re->isDown){
-					status = "DEAD";
-				}
-				printf("---Neighbor %d   %s\n", *nb , status);
-			}else{
-				printf("---Neighbor %d\n", *nb);
-			}
-			
-			
-			curr = curr->next;
-		}
+        char* objectName = (char *)currentp->data;
+        printf("%s  ",objectName);
         currentp = currentp->next;
     }
-    
+	printf("\n");
+}
+
+void printLinks(linkedList* list){
+	node* currentp = list->head;
+	printf("Neighbors: ");
+    while(currentp != NULL){
+        int* id = (int *)currentp->data;
+        printf("%d  ",*id);
+        currentp = currentp->next;
+    }
+	printf("\n");
+}
+
+void printRouting(linkedList list){
+    node* currentp = list.head;
+	printf("\n--------------ROUTING TABLE-------------\n");
+    while( currentp != NULL ){
+        routingEntry* entryp = (routingEntry *)currentp->data;
+		if( !entryp->isDown){
+		if( entryp->nodeId == mynodeID){
+			printf("*Node %d\n", entryp->nodeId);
+		}else{
+			printf("Node %d\n", entryp->nodeId);
+		}
+		printObjects(entryp->objects);
+		printLinks(entryp->neighbors);
+	}
+        currentp = currentp->next;
+    }
+	printf("----------------------------------------\n\n");
 }
 
 void printRoutingEntry(routingEntry* re){
