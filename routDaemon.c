@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include "linkedList.h"
 #include "packet.h"
+#include "algo.h"
 
 #define mynode1Conf "own.conf"
 #define mynode1Files "node1.files"
@@ -324,6 +325,11 @@ int main(int argc, char** argv){
 							re->LSACountDown = LSATimeout;	
 							//printRoutingEntry(re);
 							insert(&routing, re, sizeof(routingEntry));
+							
+							/* compute parents */
+							computeParent(&routing,me);
+							computeNextHops(&routing, mynodeID);
+							
 							forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
 							printRouting(routing);
 							
