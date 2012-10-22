@@ -368,6 +368,8 @@ int main(int argc, char** argv){
 								re->seqNumReceive = seqNumberUDP;
 								re->numFiles = numFilesUDP;
 								re->numLinks = numLinksUDP;
+								computeParent(&routing,me);
+								computeNextHops(&routing, mynodeID);
 								printRouting(routing);
 								// here neighbor Id is an exclusion
 								forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
@@ -423,18 +425,21 @@ int main(int argc, char** argv){
 								if( objLength == strlen(objectName) ){
 									/* search local files */
 									fileEntry* fe = getFileEntry(&fileList, objectName);
-									/* search non-local files */
-									node* cur = routing.head;
-									while(cur != NULL){
-										if((fe = getFileEntry((routingEntry*)(cur->data))->objects) != NULL)
-											break;
-										cur = cur->next;
-									}
-									
 									if( fe != NULL){
 										sprintf(response, "OK %zd http://localhost:%d/%s", strlen(fe->path), me->serverPort, fe->path);
 									}else{
+										// if not in local node, we start to find remote node
+										routingEntry* desti = getFileFromOther(&routing, objectName);
+										if( desti != NULL){
+											routingEntry* nextHop = getRoutingEntry(&routing, desti->nextHop);
+											char tmp[200];
+											sprintf(tmp, "http://%s:%d/rd/%d/%s",nextHop->hostName, \
+											nextHop->serverPort,nextHop->localPort, objectName);
+											sprintf(response, "OK %zd %s", strlen(tmp), tmp);
+										}
+										else{
 										sprintf(response, "NOTFOUND 0 ");
+										}
 									}
 									ssize_t tmp;
 									if(( tmp = send(i, response, strlen(response), 0)) <= 0 ){
@@ -464,8 +469,6 @@ int main(int argc, char** argv){
 										me->numFiles++;
 										advertise( remoteSocket, me->numLinks, me->numFiles);
 									} 
-									
-									
 								}
 							}
 						}

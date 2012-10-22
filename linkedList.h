@@ -79,5 +79,6 @@ void printRoutingEntry(routingEntry* re);
 void decreaseTTL();
 int resolvNeighbor(struct sockaddr_in cli_addr);
 int close_socket(int sock);
-
+int containObject(linkedList* list, char* obj);
+routingEntry* getFileFromOther(linkedList* list, char* obj);
 #endif

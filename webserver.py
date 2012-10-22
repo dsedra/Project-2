@@ -93,6 +93,7 @@ def rd_getrdpeer(p, obj):
 	s.sendall(re)
 	back = s.recv(4096)
 	s.close()
+	print '**Response from routing daemon: \n'+str(back)
 	return checkResponse(back)
 
 if __name__ == '__main__':

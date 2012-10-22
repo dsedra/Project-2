@@ -25,6 +25,8 @@ routingEntry* initRE(int nodeId,int visited,char* hostName,int routingPort, int 
 	newp->numFiles = 0;
 	newp->numLinks = 0;
 	newp->isDown = 0;
+	newp->nextHop = -1;
+	newp->parent = NULL;
 	
 	newp->neighbors = malloc(sizeof(linkedList));
 	newp->objects = malloc(sizeof(linkedList));
@@ -103,7 +105,7 @@ void deleteRoutingEntry(int nodeId){
 		curr = curr->next;
 	}	
 }
-
+// This is only used for local search
 fileEntry* getFileEntry(linkedList* list, char* obj){
 	node* curr;
 	curr = list->head;
@@ -116,6 +118,32 @@ fileEntry* getFileEntry(linkedList* list, char* obj){
 	}
 	return NULL;
 }
+
+int containObject(linkedList* list, char* obj){
+	node* curr  = list->head;
+	while( curr != NULL ){
+		char* objName = (char*)curr->data;
+		if( strcmp(objName, obj) == 0){
+			return 1;
+		}
+		curr = curr->next;
+	}
+	return 0;
+}
+
+// This is used for search object in other routing entries
+routingEntry* getFileFromOther(linkedList* list, char* obj){
+	node* curr  = list->head;
+	while( curr != NULL ){
+		routingEntry* re = (routingEntry*)curr->data;
+		if( containObject(re->objects, obj)){
+			return re;
+		}
+		curr = curr->next;
+	}
+	return NULL;
+}
+
 
 routingEntry* getRoutingEntry( linkedList* list, int nodeId ){
 	node* curr;
@@ -215,10 +243,17 @@ void printRouting(linkedList list){
         routingEntry* entryp = (routingEntry *)currentp->data;
 		if( !entryp->isDown){
 		if( entryp->nodeId == mynodeID){
-			printf("*Node %d\n", entryp->nodeId);
+			printf("*Node %d, ", entryp->nodeId);
 		}else{
-			printf("Node %d\n", entryp->nodeId);
+			printf("Node %d, ", entryp->nodeId);
+		}		
+		printf("nextHop %d, ", entryp->nextHop);
+		if( entryp->parent == NULL ){
+			printf("parent: unknown\n");
+		}else{
+			printf("parentNode: %d\n", entryp->parent->nodeId);
 		}
+		
 		printObjects(entryp->objects);
 		printLinks(entryp->neighbors);
 	}
