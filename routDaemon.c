@@ -421,7 +421,16 @@ int main(int argc, char** argv){
 						if(sscanf(clientArr[i], "%s %d %s", method, &objLength, objectName) >= 3){
 							if(!strcmp(method,"GETRD")){
 								if( objLength == strlen(objectName) ){
+									/* search local files */
 									fileEntry* fe = getFileEntry(&fileList, objectName);
+									/* search non-local files */
+									node* cur = routing.head;
+									while(cur != NULL){
+										if((fe = getFileEntry((routingEntry*)(cur->data))->objects) != NULL)
+											break;
+										cur = cur->next;
+									}
+									
 									if( fe != NULL){
 										sprintf(response, "OK %zd http://localhost:%d/%s", strlen(fe->path), me->serverPort, fe->path);
 									}else{
