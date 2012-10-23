@@ -12,8 +12,8 @@
 #include "packet.h"
 #include "algo.h"
 
-#define mynode1Conf "own.conf"
-#define mynode1Files "node1.files"
+//#define mynode1Conf "own.conf"
+//#define mynode1Files "node1.files"
 
 #define max(a,b) ((a>b)?a:b)
 
@@ -28,6 +28,8 @@ int retranCycle = 3;
 int neighborTimeout = 30;
 int LSATimeout = 30;
 int mynodeID = 50;
+char mynode1Conf[50];
+char mynode1Files[50];
 
 typedef struct timeStruct{	
 	int timeout;
@@ -104,13 +106,26 @@ int main(int argc, char** argv){
 	int numLinksUDP;
 	int numFilesUDP;
 
+	/* check for correct number params */
+	if(argc < 8){
+		printf("Usage: <node id> <config file> <file list> <adv cycle time> " \
+			"<neighbor timeout> <retran timeout> <LSA timeout>\n");
+		exit(1);
+	}
+	
+	/* setup args */
+	mynodeID = atoi(argv[1]);
+	advCycle = atoi(argv[4]);
+	retranCycle = atoi(argv[6]);
+	neighborTimeout = atoi(argv[5]);
+	LSATimeout = atoi(argv[7]);
+	strcpy(mynode1Conf, argv[2]);
+	strcpy(mynode1Files, argv[3]); 
 	
 	for(p = 0; p < 1024; p++){
 		clientArr[p] = malloc(1);
 		*(clientArr[p]) = '\000'; 
 	}
-	
-	/* TODO add command line */
     
     /* Initialize file list and routing list */
     fileList.head = NULL;
