@@ -390,6 +390,7 @@ int main(int argc, char** argv){
 								computeNextHops(&routing, mynodeID);
 								printRouting(routing);
 								// here neighbor Id is an exclusion
+										
 								forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
 							}
 							else if(re->seqNumReceive > seqNumberUDP){

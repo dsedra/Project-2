@@ -280,6 +280,8 @@ void printRouting(linkedList list){
 			printf("Node %d, ", entryp->nodeId);
 		}		
 		printf("nextHop %d, ", entryp->nextHop);
+		printf("isDown %d, ", entryp->isDown);
+		printf("isVisited %d, ", entryp->visited);
 		if( entryp->parent == NULL ){
 			printf("parent: unknown\n");
 		}else{

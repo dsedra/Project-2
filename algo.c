@@ -17,7 +17,6 @@ void computeParent(linkedList* rTable, routingEntry* sourcep){
 		routingEntry* cur = popQue(&que);
 		printf("Pop node %d\n", cur->nodeId);
 		/* loop through children */
-		
 		node* child = cur->neighbors->head;
 		
 		while(child != NULL){
@@ -49,6 +48,7 @@ void computeNextHops(linkedList* rTable, int srcId){
 
 int computeNextHop(routingEntry* destination,int srcId){
 	
+	destination->visited = 0;
 	routingEntry* curr  = destination;
 	
 	while( (curr->parent) && (curr->parent->nodeId != srcId )){
