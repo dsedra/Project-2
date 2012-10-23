@@ -23,11 +23,11 @@ void computeParent(linkedList* rTable, routingEntry* sourcep){
 		while(child != NULL){
 			routingEntry* childEntry = getRoutingEntry(rTable, *(int *)child->data);
 			
-			if(childEntry->visited == 0){
-				childEntry->parent = cur;
-				childEntry->visited = 1;
-				insert(&que, childEntry,  sizeof(routingEntry));
-			}
+				if(childEntry->visited == 0 && !childEntry->isDown){
+					childEntry->parent = cur;
+					childEntry->visited = 1;
+					insert(&que, childEntry,  sizeof(routingEntry));
+				}
 			
 			child = child->next;
 		}
