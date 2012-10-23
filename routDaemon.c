@@ -326,6 +326,11 @@ int main(int argc, char** argv){
 							for( count = 0 ; count < numLinksUDP ; count++){
 								ptr = readInt(&nodeId, ptr);
 								insertOrdered(re->neighbors, &nodeId);
+								/* check if neighbors in table and add if not */
+								if(getRoutingEntry(&routing, nodeId) == NULL){
+									routingEntry* neigh = initRE(nodeId,0,"",-1,-1,-1,0);
+									insert(&routing, neigh, sizeof(routingEntry));
+								}
 							}
 							for( count = 0 ; count < numFilesUDP ; count ++ ){
 								ptr = readString(objectName, ptr);
@@ -374,6 +379,12 @@ int main(int argc, char** argv){
 								for( count = 0 ; count < numLinksUDP ; count++ ){
 									ptr = readInt(&nodeId, ptr);
 									insertOrdered(re->neighbors, &nodeId);
+									/* check if neighbors in table and add if not */
+									if(getRoutingEntry(&routing, nodeId) == NULL){
+										routingEntry* neigh = initRE(nodeId,0,"",-1,-1,-1,0);
+										insert(&routing, neigh, sizeof(routingEntry));
+									}
+									
 								}
 								for( count = 0 ; count < numFilesUDP ; count ++ ){
 									ptr = readString(objectName, ptr);
@@ -383,6 +394,7 @@ int main(int argc, char** argv){
 								re->seqNumReceive = seqNumberUDP;
 								re->numFiles = numFilesUDP;
 								re->numLinks = numLinksUDP;
+								printRouting(routing);
 								computeParent(&routing,me);
 								computeNextHops(&routing, mynodeID);
 								printRouting(routing);
