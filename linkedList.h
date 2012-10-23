@@ -64,6 +64,7 @@ extern int mynodeID;
 extern int advCycle; 
 
 
+void insertOrdered(linkedList* list, int* id);
 void insert( linkedList* list, void* data, int size);
 void deleteRoutingEntry(int nodeId);
 fileEntry* getFileEntry(linkedList* list, char* obj);

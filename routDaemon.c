@@ -202,7 +202,7 @@ int main(int argc, char** argv){
 			//int nId = re->nodeId;
 			int* nId = malloc(sizeof(int));
 			*nId = re->nodeId;
-			insert(me->neighbors, nId, sizeof(int));
+			insertOrdered(me->neighbors, nId);
 			me->numLinks++;
 		}
 		trav = trav->next;
@@ -325,7 +325,7 @@ int main(int argc, char** argv){
 							re = initRE(senderIdUDP, 0, "", -1 , -1, -1, 0);
 							for( count = 0 ; count < numLinksUDP ; count++){
 								ptr = readInt(&nodeId, ptr);
-								insert(re->neighbors, &nodeId, sizeof(int));
+								insertOrdered(re->neighbors, &nodeId);
 							}
 							for( count = 0 ; count < numFilesUDP ; count ++ ){
 								ptr = readString(objectName, ptr);
@@ -373,7 +373,7 @@ int main(int argc, char** argv){
 								// update LSA accordingly
 								for( count = 0 ; count < numLinksUDP ; count++ ){
 									ptr = readInt(&nodeId, ptr);
-									insert(re->neighbors, &nodeId, sizeof(int));
+									insertOrdered(re->neighbors, &nodeId);
 								}
 								for( count = 0 ; count < numFilesUDP ; count ++ ){
 									ptr = readString(objectName, ptr);
