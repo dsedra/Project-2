@@ -23,7 +23,8 @@ void computeParent(linkedList* rTable, routingEntry* sourcep){
 		while(child != NULL){
 			routingEntry* childEntry = getRoutingEntry(rTable, *(int *)child->data);
 			
-			if((childEntry->visited == 0) && (!childEntry->isDown)){
+			if((childEntry) && (childEntry->visited == 0) && (!childEntry->isDown)){
+				printf("child id: %d\n", childEntry->nodeId);
 				childEntry->parent = cur;
 				childEntry->visited = 1;
 				insert(&que, childEntry,  sizeof(routingEntry));
@@ -51,8 +52,13 @@ int computeNextHop(routingEntry* destination,int srcId){
 	
 	routingEntry* curr  = destination;
 	
-	while( curr->parent->nodeId != srcId ){
+	while( (curr->parent) && (curr->parent->nodeId != srcId )){
 		curr = curr->parent;
+	}
+	
+	/* failure */
+	if(curr->parent == NULL){
+		return -1;
 	}
 	
 	return curr->nodeId;

@@ -326,11 +326,6 @@ int main(int argc, char** argv){
 							for( count = 0 ; count < numLinksUDP ; count++){
 								ptr = readInt(&nodeId, ptr);
 								insertOrdered(re->neighbors, &nodeId);
-								/* check if neighbors in table and add if not */
-								if(getRoutingEntry(&routing, nodeId) == NULL){
-									routingEntry* neigh = initRE(nodeId,0,"",-1,-1,-1,0);
-									insert(&routing, neigh, sizeof(routingEntry));
-								}
 							}
 							for( count = 0 ; count < numFilesUDP ; count ++ ){
 								ptr = readString(objectName, ptr);
@@ -348,6 +343,7 @@ int main(int argc, char** argv){
 							
 							/* compute parents */
 							computeParent(&routing,me);
+							printRouting(routing);
 							computeNextHops(&routing, mynodeID);
 							
 							forward(remoteSocket, udpReadBuf, packetSize, senderIdUDP ,neighborId);
@@ -379,11 +375,6 @@ int main(int argc, char** argv){
 								for( count = 0 ; count < numLinksUDP ; count++ ){
 									ptr = readInt(&nodeId, ptr);
 									insertOrdered(re->neighbors, &nodeId);
-									/* check if neighbors in table and add if not */
-									if(getRoutingEntry(&routing, nodeId) == NULL){
-										routingEntry* neigh = initRE(nodeId,0,"",-1,-1,-1,0);
-										insert(&routing, neigh, sizeof(routingEntry));
-									}
 									
 								}
 								for( count = 0 ; count < numFilesUDP ; count ++ ){
@@ -457,7 +448,7 @@ int main(int argc, char** argv){
 									}else{
 										// if not in local node, we start to find remote node
 										routingEntry* desti = getFileFromOther(&routing, objectName);
-										if( desti != NULL){
+										if( (desti != NULL) && (desti->nextHop > 0)){/* don't go if no next hop */
 											routingEntry* nextHop = getRoutingEntry(&routing, desti->nextHop);
 											char tmp[200];
 											sprintf(tmp, "http://%s:%d/rd/%d/%s",nextHop->hostName, \
