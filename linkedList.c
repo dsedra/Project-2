@@ -51,10 +51,42 @@ fileEntry* initFL(char* objectName, char* path){
     return newp;
 }
 
-void insert(linkedList* list, void* data, int size){
+/* insert with order */
+void insertOrdered(linkedList* list, int* id){
+	node* n = malloc(sizeof(node));
+	n->data = malloc(sizeof(int));
+	n->next = NULL;
+	memcpy(n->data, id, sizeof(int));
 	
+	node* cur = list->head;
+	node* prev = NULL;
+	/* find insert point */
+	while( (cur != NULL) && (*id >= *((int *)(cur->data))) ){
+		prev = cur;
+		cur = cur->next;
+	}
+	
+	if(list->head == NULL){
+		list->head = n;
+		list->tail = n;
+	}
+	else if(cur == list->head){
+		n->next = list->head;
+		list->head = n;
+	}
+	else{
+		prev->next = n;
+		n->next = cur;
+		if(prev == list->tail)
+			list->tail = n;
+	}
+	
+	return;
+}
+
+void insert(linkedList* list, void* data, int size){
 	node* n;
-	n = malloc( sizeof(node) );
+	n = malloc(sizeof(node));
 	n->data = malloc(size);
 	memcpy(n->data, data, size);
 	//n->data = data;
