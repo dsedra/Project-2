@@ -11,6 +11,7 @@
 #include "linkedList.h"
 #include "packet.h"
 #include "algo.h"
+#include "daemonize.h"
 
 //#define mynode1Conf "own.conf"
 //#define mynode1Files "node1.files"
@@ -105,6 +106,7 @@ int main(int argc, char** argv){
 	int seqNumberUDP;
 	int numLinksUDP;
 	int numFilesUDP;
+
 
 	/* check for correct number params */
 	if(argc < 8){
