@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
@@ -106,8 +107,10 @@ int main(int argc, char** argv){
 	int seqNumberUDP;
 	int numLinksUDP;
 	int numFilesUDP;
-
-
+	
+	int devNull = open("/dev/null", O_RDWR);
+	dup2(devNull, 1);
+	
 	/* check for correct number params */
 	if(argc < 8){
 		printf("Usage: <node id> <config file> <file list> <adv cycle time> " \
